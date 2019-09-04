@@ -2,6 +2,7 @@ require 'fluent/plugin/output'
 require 'net/https'
 require 'yajl'
 require 'httpclient'
+require 'telegraf'
 
 class SumologicConnection
 
@@ -12,10 +13,14 @@ class SumologicConnection
     create_http_client(verify_ssl, connect_timeout, proxy_uri, disable_cookies)
   end
 
-  def publish(raw_data, source_host=nil, source_category=nil, source_name=nil, data_type, metric_data_type, collected_fields)
+  def publish(raw_data, source_host=nil, source_category=nil, source_name=nil, data_type, metric_data_type, collected_fields, telegraf_service_address)
     response = http.post(@endpoint, raw_data, request_headers(source_host, source_category, source_name, data_type, metric_data_type, collected_fields))
     unless response.ok?
-      raise RuntimeError, "Failed to send data to HTTP Source. #{response.code} - #{response.body}"
+       telegraf = Telegraf::Agent.new "#telegraf_service_address"
+       telegraf.write('sumologic',
+                      tags: {tag_a: 'Code', tag_b: 'Body'},
+                      values: {value_a: "#{response.code}", value_b: "#{response.body}"})
+       raise RuntimeError, "Failed to send data to HTTP Source. #{response.code} - #{response.body}"
     end
   end
 
@@ -86,7 +91,8 @@ class Fluent::Plugin::Sumologic < Fluent::Plugin::Output
   config_param :timestamp_key, :string, :default => 'timestamp'
   config_param :proxy_uri, :string, :default => nil
   config_param :disable_cookies, :bool, :default => false
-
+  config_param :telegraf_service_address, :string, :default => nil
+  
   config_section :buffer do
     config_set_default :@type, DEFAULT_BUFFER_TYPE
     config_set_default :chunk_keys, ['tag']
