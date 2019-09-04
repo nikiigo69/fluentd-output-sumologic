@@ -16,7 +16,7 @@ class SumologicConnection
   def publish(raw_data, source_host=nil, source_category=nil, source_name=nil, data_type, metric_data_type, collected_fields, telegraf_service_address)
     response = http.post(@endpoint, raw_data, request_headers(source_host, source_category, source_name, data_type, metric_data_type, collected_fields))
     unless response.ok?
-       telegraf = Telegraf::Agent.new "#telegraf_service_address"
+       telegraf = Telegraf::Agent.new "#{telegraf_service_address}"
        telegraf.write('sumologic',
                       tags: {tag_a: 'Code', tag_b: 'Body'},
                       values: {value_a: "#{response.code}", value_b: "#{response.body}"})
