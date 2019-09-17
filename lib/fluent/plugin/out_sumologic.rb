@@ -2,27 +2,34 @@ require 'fluent/plugin/output'
 require 'net/https'
 require 'yajl'
 require 'httpclient'
-require 'telegraf'
+require 'statsd-instrument'
 
 class SumologicConnection
 
   attr_reader :http
 
-  def initialize(endpoint, verify_ssl, connect_timeout, proxy_uri, disable_cookies)
+  def initialize(endpoint, verify_ssl, connect_timeout, proxy_uri, disable_cookies, statsd_service_address)
     @endpoint = endpoint
+    @statsd_service_address = statsd_service_address
     create_http_client(verify_ssl, connect_timeout, proxy_uri, disable_cookies)
   end
 
-  def publish(raw_data, source_host=nil, source_category=nil, source_name=nil, data_type, metric_data_type, collected_fields, telegraf_service_address)
-    response = http.post(@endpoint, raw_data, request_headers(source_host, source_category, source_name, data_type, metric_data_type, collected_fields))
-    unless response.ok?
-      if telegraf_service_address    
-          telegraf = Telegraf::Agent.new "#{telegraf_service_address}"
-          telegraf.write('sumologic',
-                          tags: {tag_a: 'Code', tag_b: 'Body'},
-                          values: {value_a: "#{response.code}", value_b: "#{response.body}"})
-       end
-       raise RuntimeError, "Failed to send data to HTTP Source. #{response.code} - #{response.body}"
+  def publish(raw_data, source_host=nil, source_category=nil, source_name=nil, data_type, metric_data_type, collected_fields)
+    if @statsd_service_address
+      StatsD.backend = StatsD::Instrument::Backends::UDPBackend.new(@telegraf_service_address)
+      StatsD.prefix = 'sumolog'
+      StatsD.measure('http.post') do
+        response = http.post(@endpoint, raw_data, request_headers(source_host, source_category, source_name, data_type, metric_data_type, collected_fields))
+        unless response.ok?
+          StatsD.increment('http.post')
+          raise RuntimeError, "Failed to send data to HTTP Source. #{response.code} - #{response.body}"
+        end
+      end
+    else
+      response = http.post(@endpoint, raw_data, request_headers(source_host, source_category, source_name, data_type, metric_data_type, collected_fields))
+      unless response.ok?
+        raise RuntimeError, "Failed to send data to HTTP Source. #{response.code} - #{response.body}"
+      end
     end
   end
 
@@ -94,7 +101,7 @@ class Fluent::Plugin::Sumologic < Fluent::Plugin::Output
   config_param :proxy_uri, :string, :default => nil
   config_param :disable_cookies, :bool, :default => false
   config_param :telegraf_service_address, :string, :default => nil
-  
+
   config_section :buffer do
     config_set_default :@type, DEFAULT_BUFFER_TYPE
     config_set_default :chunk_keys, ['tag']
@@ -137,7 +144,7 @@ class Fluent::Plugin::Sumologic < Fluent::Plugin::Output
       end
     end
 
-    @sumo_conn = SumologicConnection.new(conf['endpoint'], conf['verify_ssl'], conf['open_timeout'].to_i, conf['proxy_uri'], conf['disable_cookies'])
+    @sumo_conn = SumologicConnection.new(conf['endpoint'], conf['verify_ssl'], conf['open_timeout'].to_i, conf['proxy_uri'], conf['disable_cookies'], conf['statsd_service_address'])
     super
   end
 
