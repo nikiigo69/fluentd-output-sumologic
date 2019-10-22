@@ -20,8 +20,9 @@ class SumologicConnection
       StatsD.prefix = 'sumolog'
       StatsD.measure('http.post') do
         response = http.post(@endpoint, raw_data, request_headers(source_host, source_category, source_name, data_type, metric_data_type, collected_fields))
+        StatsD.increment('http.post.all')
         unless response.ok?
-          StatsD.increment('http.post')
+          StatsD.increment('http.post.error')
           raise RuntimeError, "Failed to send data to HTTP Source. #{response.code} - #{response.body}"
         end
       end
