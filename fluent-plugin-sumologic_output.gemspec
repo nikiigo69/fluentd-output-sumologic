@@ -25,4 +25,5 @@ Gem::Specification.new do |gem|
   gem.add_development_dependency "codecov", ">= 0.1.10"
   gem.add_runtime_dependency "fluentd", ">= 0.14.12"
   gem.add_runtime_dependency 'httpclient', '~> 2.8.0'
+  gem.add_runtime_dependency 'statsd-instrument',  ">= 3.0.0"
 end
