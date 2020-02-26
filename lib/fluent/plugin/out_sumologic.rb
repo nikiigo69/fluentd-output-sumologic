@@ -16,8 +16,13 @@ class SumologicConnection
 
   def publish(raw_data, source_host=nil, source_category=nil, source_name=nil, data_type, metric_data_type, collected_fields)
     if @statsd_service_address
-      StatsD.backend = StatsD::Instrument::Backends::UDPBackend.new(@telegraf_service_address)
-      StatsD.prefix = 'sumolog'
+      env = StatsD::Instrument::Environment.new(
+        'STATSD_ENV' => 'production',
+        'STATSD_PREFIX' => 'sumolog',
+        'STATSD_IMPLEMENTATION' => 'statsd',
+        'STATSD_ADDR' => @statsd_service_address
+      )
+      client = StatsD::Instrument::Client.from_env(env)
       StatsD.measure('http.post') do
         response = http.post(@endpoint, raw_data, request_headers(source_host, source_category, source_name, data_type, metric_data_type, collected_fields))
         StatsD.increment('http.post.all')
